@@ -24,6 +24,11 @@ class ConnectionHandlerReuse
         return $this->sockSendStatus && $this->msgSockStatus;
     }
 
+    public function isAsocketConnected()
+    {
+        return $this->sockSendStatus || $this->msgSockStatus;
+    }
+
     public function isMsgSockStatusConnected() : bool
     {
         return $this->msgSockStatus;
@@ -42,7 +47,9 @@ class ConnectionHandlerReuse
            echo "new connection entered\n";
            socket_set_nonblock($this->msgSock);
            $this->msgSockStatus = true;
-           $this->startConx2Server();
+           if($this->sockSendStatus == false) {
+             $this->startConx2Server();
+           }
         }
     }
 
@@ -83,23 +90,31 @@ class ConnectionHandlerReuse
     public function forward()
     {
        try {
+        //    echo "msgSock listening.\n";
             $clientBuffer = $this->listen($this->msgSock, "msgSock");
             if(!$this->isMsgSockStatusConnected()) {
+                echo "msgSock isMsgSockStatusConnected.\n";
                 return;
             }
+            // echo "msgSock clientBuffer:: $clientBuffer.\n";
             if($clientBuffer != "") {
                 $this->write($this->sockSend, $clientBuffer, "sockSend");
                 if(!$this->isSockSendStatusConnected()) {
+                    echo "sockSend isSockSendStatusConnected.\n";
                     return;
                 }
             }
+            // echo "sockSend listening.\n";
             $serverBuffer = $this->listen($this->sockSend, "sockSend");
             if(!$this->isSockSendStatusConnected()) {
+                echo "sockSend isSockSendStatusConnected.\n";
                 return;
             }
+            // echo "sockSend serverBuffer:: $serverBuffer.\n";
             if($serverBuffer != "") {
                 $this->write($this->msgSock,$serverBuffer, "msgSock");
                 if(!$this->isMsgSockStatusConnected()) {
+                    echo "msgSock isMsgSockStatusConnected.\n";
                     return;
                 }
             }
@@ -116,13 +131,14 @@ class ConnectionHandlerReuse
         // echo " handled by $process\n";
         socket_clear_error($sock);
         $read = socket_read($sock, 20480, PHP_BINARY_READ);
+        $errorCode = socket_last_error($sock);
+        $msg = socket_strerror($errorCode);
+        echo "[$errorCode] $msg\n";
         // echo $read;
         if($read == "") {
-            $errorCode = socket_last_error($sock);
-            $msg = socket_strerror($errorCode);
             if($errorCode !== SOCKET_EAGAIN) {
                 echo "closing $process\n";
-                echo "[$errorCode] $msg\n";
+                // echo "[$errorCode] $msg\n";
                 if($process == 'sockSend') {
                     $this->sockSendStatus = false;
                     socket_shutdown($this->sockSend);
@@ -145,10 +161,10 @@ class ConnectionHandlerReuse
     private function write(Socket $sock, $buf, $process): void
     {
         $status = socket_write($sock, $buf, strlen($buf));
+        $errorCode = socket_last_error($sock);
+        $msg = socket_strerror($errorCode);
+        echo "[$errorCode] $msg\n";
         if($status === false) {
-            $errorCode = socket_last_error($sock);
-            $msg = socket_strerror($errorCode);
-            echo "[$errorCode] $msg\n";
             if($msg != "") {
                 echo " handled write by $process\n";
                 if($process == 'sockSend') {

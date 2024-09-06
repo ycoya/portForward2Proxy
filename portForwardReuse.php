@@ -50,12 +50,18 @@ if ($outBoundLocalPortEnabled) {
 
 $checkForNewConn = true;
 while (true) {
+    // echo "check new connection\n";
     if ($checkForNewConn && (!$outBoundLocalPortEnabled || ($outBoundLocalPortEnabled && !empty($_socketSendSrcPorts)))) {
         $sockSendLocalPort = array_shift($_socketSendSrcPorts);
+        echo "starting new connection\n";
         $con = new ConnectionHandlerReuse($sockListen, $remoteAddress, $dstPort, $localAddress, $sockSendLocalPort);
+        echo "starting handler\n";
+        
         if ($con->isConnected()) {
+            echo "starting connected\n";
             $connections[] = $con;
         } else {
+            echo "no connected\n";
             if ($outBoundLocalPortEnabled) {
                 array_push($_socketSendSrcPorts, $sockSendLocalPort);
             }
@@ -63,9 +69,14 @@ while (true) {
     }
 
     foreach ($connections as $key => $connection) {
-        $connection->forward();
+        // echo "is connected?\n";            
+        if($connection->isConnected()) {
+            // echo "forward before\n";
+            $connection->forward();
+            // echo "forward after\n";
+        }
 
-        if (!$connection->isConnected()) {
+        if (!$connection->isAsocketConnected()) {
             $connectionsToRemove[] = $key;
         } else if (!$connection->isSockSendStatusConnected()) {
             echo "lost connection to server\n";
@@ -81,7 +92,7 @@ while (true) {
     }
 
     foreach ($connectionsToRemove as $index) {
-        // echo "removing $index...\n";
+        //echo "removing $index...\n";
         unset($connections[$index]);
     }
     if (count($connectionsToRemove) != 0) {

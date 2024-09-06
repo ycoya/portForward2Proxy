@@ -1,6 +1,6 @@
 <?php
 /**
- * Aquí se intenta; que si se cae la conexi'on de entrada(msgSock) o la de salida(sockSend), se elimina el objeto y se vuelve a establecer
+ * Aquí se intenta; que si se cae la conexión de entrada(msgSock) o la de salida(sockSend), se elimina el objeto y se vuelve a establecer
  * ambas conexiones;
  */
 require('./lib/ConnectionHandler.php');
