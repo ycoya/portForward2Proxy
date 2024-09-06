@@ -6,6 +6,10 @@
 require('./lib/ConnectionHandler.php');
 extract(require('config.php'));
 
+if(!defined('SOCKET_EAGAIN')) {
+    define('SOCKET_EAGAIN', 10035);
+}
+
 error_reporting(E_ALL);
 
 /* Permitir al script esperar para conexiones. */
@@ -56,7 +60,7 @@ while (true) {
             unset($con);
             $con = null;
             if ($outBoundLocalPortEnabled) {
-                array_unshift($_socketSendSrcPorts, $sockSendLocalPort);
+                array_push($_socketSendSrcPorts, $sockSendLocalPort);
             }
         }
     }

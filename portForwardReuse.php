@@ -6,6 +6,9 @@
 require('./lib/ConnectionHandlerReuse.php');
 extract(require('config.php'));
 
+if(!defined('SOCKET_EAGAIN')) {
+    define('SOCKET_EAGAIN', 10035);
+}
 
 error_reporting(E_ALL);
 
@@ -54,7 +57,7 @@ while (true) {
             $connections[] = $con;
         } else {
             if ($outBoundLocalPortEnabled) {
-                array_unshift($_socketSendSrcPorts, $sockSendLocalPort);
+                array_push($_socketSendSrcPorts, $sockSendLocalPort);
             }
         }
     }

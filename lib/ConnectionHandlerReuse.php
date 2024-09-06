@@ -118,11 +118,11 @@ class ConnectionHandlerReuse
         $read = socket_read($sock, 20480, PHP_BINARY_READ);
         // echo $read;
         if($read == "") {
-            $msg = socket_strerror(socket_last_error($sock));
-            // if($msg != "" && $this->checkMsg($msg, ["socket is not connected", "aborted"])) {
-                if($msg != "" && !$this->checkMsg($msg, ["non-blocking", "desbloqueo"])) {
-                echo " handled by $process\n";
-                echo "$msg\n";
+            $errorCode = socket_last_error($sock);
+            $msg = socket_strerror($errorCode);
+            if($errorCode !== SOCKET_EAGAIN) {
+                echo "closing $process\n";
+                echo "[$errorCode] $msg\n";
                 if($process == 'sockSend') {
                     $this->sockSendStatus = false;
                     socket_shutdown($this->sockSend);
@@ -146,11 +146,11 @@ class ConnectionHandlerReuse
     {
         $status = socket_write($sock, $buf, strlen($buf));
         if($status === false) {
-            $msg = socket_strerror(socket_last_error($sock));
-        // if($msg != "" && $this->checkMsg($msg, ["socket is not connected", "aborted"])) {
+            $errorCode = socket_last_error($sock);
+            $msg = socket_strerror($errorCode);
+            echo "[$errorCode] $msg\n";
             if($msg != "") {
                 echo " handled write by $process\n";
-                echo "$msg\n";
                 if($process == 'sockSend') {
                     $this->sockSendStatus = false;
                     socket_shutdown($this->sockSend);
