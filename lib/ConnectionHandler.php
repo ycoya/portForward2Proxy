@@ -1,12 +1,9 @@
 <?php
 
-
-
 class ConnectionHandler
 {
     protected Socket|bool $msgSock;
     protected Socket|bool $sockSend;
-    // protected bool $cxnStatus = true;
     protected bool $sockSendStatus = false;
     protected bool $msgSockStatus = false;
 
@@ -55,11 +52,8 @@ class ConnectionHandler
     public function startConx2Server()
     {
         $this->sockSend = socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
-    //  $this->sockSend = socket_create(AF_INET, SOCK_DGRAM, SOL_UDP);
-
-        socket_get_option($this->sockSend, SOL_SOCKET, SO_REUSEADDR);
-        // socket_get_option($sockSend, SOL_SOCKET, 15);
-        socket_get_option($this->sockSend, SOL_SOCKET, SO_KEEPALIVE);
+        socket_set_option($this->sockSend, SOL_SOCKET, SO_REUSEADDR, 1);
+        socket_set_option($this->sockSend, SOL_SOCKET, SO_KEEPALIVE, 1);
         if ($this->sockSend == false) {
             echo "socket_create() sock falló: razón: " . socket_strerror(socket_last_error()) . "\n";
         }
@@ -68,6 +62,7 @@ class ConnectionHandler
            if (socket_bind($this->sockSend, $this->localAddress, $this->sockSendSrcPort) === false) {
                echo "socket_bind() falló: razón: " . socket_strerror(socket_last_error($this->sockSend)) . "\n";
            }
+           echo "using srcPort as outbound connection: $this->sockSendSrcPort\n";
         }
         socket_set_block($this->sockSend);
         echo "Attempting to connect to '$this->remoteAddress' on port '$this->dstPort'...";
@@ -79,16 +74,12 @@ class ConnectionHandler
             echo "OK.\n";
         }
         socket_set_nonblock($this->sockSend);
-
     }
-
-
 
 
     public function forward()
     {
        try {
-
             $clientBuffer = $this->listen($this->msgSock, "msgSock");
             if(!$this->isConnected()) {
                 return;
@@ -114,7 +105,6 @@ class ConnectionHandler
           echo $th;
           echo socket_strerror(socket_last_error($this->msgSock));
           echo socket_strerror(socket_last_error($this->sockSend));
-          echo "Thrwable";
        }
     }
 
@@ -167,7 +157,6 @@ class ConnectionHandler
         $this->sockSendStatus = false;
         socket_shutdown($this->sockSend);
         socket_close($this->sockSend);
-        // unset($this->sockSend);
     }
 
     private function closeMsgSock()
@@ -175,7 +164,6 @@ class ConnectionHandler
         $this->msgSockStatus = false;
         socket_shutdown($this->msgSock);
         socket_close($this->msgSock);
-        // unset($this->msgSock);
     }
 }
 

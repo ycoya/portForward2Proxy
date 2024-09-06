@@ -1,16 +1,10 @@
 <?php
 /**
- * Aqu'i se intenta; que si se cae la conexi'on de entrada(msgSock) o la de salida(sockSend), se elimina el objeto y se vuelve a establecer
+ * Aquí se intenta; que si se cae la conexi'on de entrada(msgSock) o la de salida(sockSend), se elimina el objeto y se vuelve a establecer
  * ambas conexiones;
  */
 require('./lib/ConnectionHandler.php');
-
-$localAddress = '127.0.0.1';
-$remoteAddress = '127.0.0.1';
-$lclPort = 8081;
-$dstPort = 8888;
-//   $socketSendSrcPorts = [5080, 6080];
-$socketSendSrcPorts = [];
+extract(require('config.php'));
 
 error_reporting(E_ALL);
 
@@ -39,6 +33,7 @@ if (socket_listen($sockListen, empty($socketSendSrcPorts) ? 5 : count($socketSen
     exit;
 }
 socket_set_nonblock($sockListen);
+echo "Listen on $localAddress:$lclPort\n";
 
 $connections = [];
 $connectionsToRemove = [];
@@ -56,6 +51,7 @@ while (true) {
         $con = new ConnectionHandler($sockListen, $remoteAddress, $dstPort, $localAddress, $sockSendLocalPort);
         if($con->isConnected()) {
             $connections[] = $con;
+            echo json_encode($_socketSendSrcPorts) . "\n";
         } else {
             unset($con);
             $con = null;
@@ -66,16 +62,14 @@ while (true) {
     }
 
     foreach($connections as $key => $connection) {
-        // echo "forwarding...\n";
         $connection->forward();
-        // echo "forwardingFinished...\n";
         if(!$connection->isConnected()) {
             $connectionsToRemove[] = $key;
         }
     }
 
     foreach($connectionsToRemove as $index) {
-        echo "removing $index...\n";
+        // echo "removing $index...\n";
         if($outBoundLocalPortEnabled) {
             $_socketSendSrcPorts[] = $connections[$index]->getSockSendSrcPort();
         }

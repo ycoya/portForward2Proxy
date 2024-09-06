@@ -1,15 +1,10 @@
 <?php
 /**
- * Aqu'i se trat'o de que cuando msgSock se cae, tratar de levantar esto sin caer la conexi'on de salida(sockSend) y reusarla. Tambi'en
+ * Aquí se trata de que cuando msgSock se cae, se intenta levantar esto sin caer la conexi'on de salida(sockSend) y reusarla. Tambi'en
  * a la inversa, si se cae la conexi'on de salida, tratar de levantarla de nuevo y seguir usando el msgSock de entrada.
  */
 require('./lib/ConnectionHandlerReuse.php');
-
-$localAddress = '127.0.0.1';
-$remoteAddress = '127.0.0.1';
-$lclPort = 8081;
-$dstPort = 8083;
-
+extract(require('config.php'));
 
 
 error_reporting(E_ALL);
@@ -35,39 +30,45 @@ if (socket_bind($sockListen, $localAddress, $lclPort) === false) {
 }
 
 //Starting to listen
-if (socket_listen($sockListen, 5) === false) {
+if (socket_listen($sockListen, empty($socketSendSrcPorts) ? 5 : count($socketSendSrcPorts)) === false) {
     echo "socket_listen() listen failed: reason: " . socket_strerror(socket_last_error($sockListen)) . "\n";
     exit;
 }
-
-
 socket_set_nonblock($sockListen);
+echo "Listen on $localAddress:$lclPort\n";
+
 $connections = [];
 $connectionsToRemove = [];
+$outBoundLocalPortEnabled = !empty($socketSendSrcPorts);
+$_socketSendSrcPorts = [];
+if ($outBoundLocalPortEnabled) {
+    $_socketSendSrcPorts = $socketSendSrcPorts;
+}
 
 $checkForNewConn = true;
 while (true) {
-    // echo count($connections);
-    if ($checkForNewConn) {
-        $con = new ConnectionHandlerReuse($sockListen, $remoteAddress, $dstPort);
+    if ($checkForNewConn && (!$outBoundLocalPortEnabled || ($outBoundLocalPortEnabled && !empty($_socketSendSrcPorts)))) {
+        $sockSendLocalPort = array_shift($_socketSendSrcPorts);
+        $con = new ConnectionHandlerReuse($sockListen, $remoteAddress, $dstPort, $localAddress, $sockSendLocalPort);
         if ($con->isConnected()) {
             $connections[] = $con;
+        } else {
+            if ($outBoundLocalPortEnabled) {
+                array_unshift($_socketSendSrcPorts, $sockSendLocalPort);
+            }
         }
     }
 
     foreach ($connections as $key => $connection) {
-
-        // echo "forwarding...\n";
         $connection->forward();
-        // echo "forwardingFinished...\n";
 
         if (!$connection->isConnected()) {
             $connectionsToRemove[] = $key;
         } else if (!$connection->isSockSendStatusConnected()) {
-            // echo "lost connection to server\n";
+            echo "lost connection to server\n";
             $connection->startConx2Server();
         } else if (!$connection->isMsgSockStatusConnected()) {
-            // echo "lost connection to client\n";
+            echo "lost connection to client\n";
             $checkForNewConn = false;
             $connection->startAcceptCnx();
             if ($connection->isMsgSockStatusConnected()) {
