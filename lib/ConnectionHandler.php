@@ -119,7 +119,7 @@ class ConnectionHandler
             $msg = socket_strerror($errorCode);
             if($errorCode !== SOCKET_EAGAIN) {
                 echo "closing $process\n";
-                echo "[$errorCode] $msg\n";                
+                echo "[$errorCode] $msg\n";
                 $this->closeSocketsSend();
                 $this->closeMsgSock();
             }
@@ -135,22 +135,13 @@ class ConnectionHandler
             $msg = socket_strerror($errorCode);
             echo "[$errorCode] $msg\n";
             if($msg != "") {
-                echo " handled written by $process\n";
+                echo "closing $process\n";
                 $this->closeSocketsSend();
                 $this->closeMsgSock();
             }
         }
     }
 
-    private function checkMsg($msg, $errorsMsgs)
-    {
-        foreach($errorsMsgs as $error) {
-            if(str_contains($msg, $error)) {
-                return true;
-            }
-        }
-        return false;
-    }
 
     private function closeSocketsSend()
     {
