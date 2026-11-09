@@ -6,13 +6,15 @@ class ConnectionHandler
     protected Socket|bool $sockSend;
     protected bool $sockSendStatus = false;
     protected bool $msgSockStatus = false;
+    private ?float $connectDeadline = null;
 
     public function __construct(
         protected Socket $sockListen,
         protected string $remoteAddress,
         protected int $dstPort,
         protected string $localAddress,
-        protected int|NULL $sockSendSrcPort )
+        protected int|NULL $sockSendSrcPort,
+        private float $connectTimeout = 5.0 )
     {
       $this->startAcceptCnx();
     }
@@ -20,6 +22,11 @@ class ConnectionHandler
     public function isConnected()
     {
         return $this->sockSendStatus && $this->msgSockStatus;
+    }
+
+    public function isActive(): bool
+    {
+        return $this->isConnected() || $this->connectDeadline !== null;
     }
 
     public function isMsgSockStatusConnected() : bool
@@ -52,33 +59,100 @@ class ConnectionHandler
     public function startConx2Server()
     {
         $this->sockSend = socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
+        if ($this->sockSend === false) {
+            $this->failConnect('socket_create() failed: ' . socket_strerror(socket_last_error()));
+            return;
+        }
         socket_set_option($this->sockSend, SOL_SOCKET, SO_REUSEADDR, 1);
         socket_set_option($this->sockSend, SOL_SOCKET, SO_KEEPALIVE, 1);
-        if ($this->sockSend == false) {
-            echo "socket_create() sock falló: razón: " . socket_strerror(socket_last_error()) . "\n";
-        }
 
         if ($this->sockSendSrcPort) {
-           if (socket_bind($this->sockSend, $this->localAddress, $this->sockSendSrcPort) === false) {
-               echo "socket_bind() falló: razón: " . socket_strerror(socket_last_error($this->sockSend)) . "\n";
+           if (!@socket_bind($this->sockSend, $this->localAddress, $this->sockSendSrcPort)) {
+               $this->failConnect('socket_bind() failed: ' . socket_strerror(socket_last_error($this->sockSend)));
+               return;
            }
            echo "using srcPort as outbound connection: $this->sockSendSrcPort\n";
         }
-        socket_set_block($this->sockSend);
+        if (!@socket_set_nonblock($this->sockSend)) {
+            $this->failConnect('socket_set_nonblock() failed: ' . socket_strerror(socket_last_error($this->sockSend)));
+            return;
+        }
+
         echo "Attempting to connect to '$this->remoteAddress' on port '$this->dstPort'...";
-        $result = socket_connect($this->sockSend, $this->remoteAddress, $this->dstPort);
-        if ($result === false) {
-            echo "socket_connect() failed.\nReason: ($result) " . socket_strerror(socket_last_error($this->sockSend)) . "\n";
-        } else {
+        if (@socket_connect($this->sockSend, $this->remoteAddress, $this->dstPort)) {
             $this->sockSendStatus = true;
             echo "OK.\n";
+            return;
         }
-        socket_set_nonblock($this->sockSend);
+
+        $error = socket_last_error($this->sockSend);
+        // Winsock reports WSAEWOULDBLOCK (10035) for a pending connect.
+        if ($error === SOCKET_EINPROGRESS || $error === SOCKET_EAGAIN ||
+            (defined('SOCKET_EWOULDBLOCK') && $error === SOCKET_EWOULDBLOCK)) {
+            $this->connectDeadline = hrtime(true) / 1e9 + $this->connectTimeout;
+            return;
+        }
+
+        $this->failConnect('socket_connect() failed: ' . socket_strerror($error));
+    }
+
+    private function finishConnect(): bool
+    {
+        if (hrtime(true) / 1e9 >= $this->connectDeadline) {
+            $this->failConnect('Outbound connection timed out');
+            return false;
+        }
+
+        $read = null;
+        $write = [$this->sockSend];
+        $except = [$this->sockSend];
+        $ready = @socket_select($read, $write, $except, 0);
+        if ($ready === false) {
+            $error = socket_last_error();
+            if ($error !== SOCKET_EINTR) {
+                $this->failConnect('socket_select() failed: ' . socket_strerror($error));
+            }
+            return false;
+        }
+        if ($ready === 0) {
+            return false;
+        }
+
+        // A refused connection can also be reported as writable.
+        $error = socket_get_option($this->sockSend, SOL_SOCKET, SO_ERROR);
+        if ($error !== 0) {
+            $this->failConnect('socket_connect() failed: ' .
+                socket_strerror($error === false ? socket_last_error($this->sockSend) : $error));
+            return false;
+        }
+
+        $this->connectDeadline = null;
+        $this->sockSendStatus = true;
+        echo "OK.\n";
+        return true;
+    }
+
+    private function failConnect(string $message): void
+    {
+        $this->connectDeadline = null;
+        $this->sockSendStatus = false;
+        $this->msgSockStatus = false;
+        if ($this->sockSend !== false) {
+            socket_close($this->sockSend);
+            $this->sockSend = false;
+        }
+        socket_close($this->msgSock);
+        $this->msgSock = false;
+        fwrite(STDERR, $message . PHP_EOL);
     }
 
 
     public function forward()
     {
+       if ($this->connectDeadline !== null && !$this->finishConnect()) {
+           return;
+       }
+
        try {
             $clientBuffer = $this->listen($this->msgSock, "msgSock");
             if(!$this->isConnected()) {
