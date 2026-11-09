@@ -6,6 +6,12 @@
 require('./lib/ConnectionHandler.php');
 extract(require('config.php'));
 
+$connectTimeout = (float) ($connectTimeout ?? 5);
+if (!is_finite($connectTimeout) || $connectTimeout <= 0) {
+    fwrite(STDERR, "connectTimeout must be a positive number of seconds.\n");
+    exit(1);
+}
+
 if(!defined('SOCKET_EAGAIN')) {
     define('SOCKET_EAGAIN', 10035);
 }
@@ -52,8 +58,8 @@ while (true) {
 
     if (!$outBoundLocalPortEnabled || ($outBoundLocalPortEnabled && !empty($_socketSendSrcPorts))) {
         $sockSendLocalPort = array_shift($_socketSendSrcPorts);
-        $con = new ConnectionHandler($sockListen, $remoteAddress, $dstPort, $localAddress, $sockSendLocalPort);
-        if($con->isConnected()) {
+        $con = new ConnectionHandler($sockListen, $remoteAddress, $dstPort, $localAddress, $sockSendLocalPort, $connectTimeout);
+        if($con->isActive()) {
             $connections[] = $con;
             echo json_encode($_socketSendSrcPorts) . "\n";
         } else {
@@ -67,7 +73,7 @@ while (true) {
 
     foreach($connections as $key => $connection) {
         $connection->forward();
-        if(!$connection->isConnected()) {
+        if(!$connection->isActive()) {
             $connectionsToRemove[] = $key;
         }
     }

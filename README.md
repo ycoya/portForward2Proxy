@@ -18,7 +18,8 @@ return [
     'remoteAddress' => '127.0.0.1',
     'lclPort' => 8081,
     'dstPort' => 8083,
-    'socketSendSrcPorts' => [] // [5001, 50002, 5547]
+    'socketSendSrcPorts' => [], // [5001, 50002, 5547]
+    'connectTimeout' => 5,
 ];
 ```
 The **localAddress** is the ip or interface from which the application start to listen.
@@ -30,6 +31,10 @@ The **lclPort** is the listening port, the application waits for new connections
 The **dstPort** is the remote port to connect to, to where the traffic is routed.
 
 The **socketSendSrcPorts** are the sources ports to choose from for the outbound connection to **remoteAddress** and **dstPort**. Realize that if you set 3 source ports, you have only 3 inbound connections accepted. If the **socketSendSrcPorts** is an empty array then the S.O. will choose a random source port as usual.
+
+For **portForward.php**, **connectTimeout** is the time in seconds to wait for
+the outbound TCP connection (default: 5). A connection that times out is
+closed without interrupting existing sessions.
 
 ## Run
 To run the script, just open a commandline in the directory of the files, and type
