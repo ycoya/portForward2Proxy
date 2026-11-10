@@ -6,6 +6,8 @@ class ConnectionHandler
 {
     protected ?Socket $msgSock = null;
     protected ?Socket $sockSend = null;
+    protected bool $msgSockStatus = false;
+    protected bool $sockSendStatus = false;
     private ?RelayDirection $toServer = null;
     private ?RelayDirection $toClient = null;
 
@@ -21,17 +23,17 @@ class ConnectionHandler
 
     public function isConnected(): bool
     {
-        return $this->toServer !== null && $this->toClient !== null;
+        return $this->msgSockStatus && $this->sockSendStatus;
     }
 
     public function isMsgSockStatusConnected(): bool
     {
-        return $this->msgSock !== null;
+        return $this->msgSockStatus;
     }
 
     public function isSockSendStatusConnected(): bool
     {
-        return $this->sockSend !== null;
+        return $this->sockSendStatus;
     }
 
     public function getSockSendSrcPort(): ?int
@@ -48,6 +50,7 @@ class ConnectionHandler
         $client = @socket_accept($this->sockListen);
         if ($client !== false) {
             $this->msgSock = $client;
+            $this->msgSockStatus = true;
             $this->startConx2Server();
         }
     }
@@ -80,8 +83,7 @@ class ConnectionHandler
                     throw self::socketFailure('Setting non-blocking mode', $socket);
                 }
             }
-            $this->toServer = new RelayDirection($client, $server);
-            $this->toClient = new RelayDirection($server, $client);
+            $this->sockSendStatus = true;
         } catch (RuntimeException $error) {
             $this->closeWithError($error);
         }
@@ -89,9 +91,13 @@ class ConnectionHandler
 
     public function forward(): void
     {
-        if ($this->toServer === null || $this->toClient === null) {
+        if (!$this->isConnected()) {
             return;
         }
+
+        // Start the relay only after both sockets are connected.
+        $this->toServer ??= new RelayDirection($this->msgSock, $this->sockSend);
+        $this->toClient ??= new RelayDirection($this->sockSend, $this->msgSock);
 
         try {
             $this->toServer->pump();
@@ -108,6 +114,8 @@ class ConnectionHandler
     {
         $this->toServer = null;
         $this->toClient = null;
+        $this->msgSockStatus = false;
+        $this->sockSendStatus = false;
         if ($this->msgSock !== null) {
             socket_close($this->msgSock);
             $this->msgSock = null;
