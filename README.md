@@ -4,7 +4,12 @@ This application opens a port and start listen on it and then forward the traffi
 
 The portForwardReuse.php file is an attempt to avoid droping the two sockets opened when a close connection exist from one of them. Two sockets are opened one for listening and the other to connect to the remote side. If one socket is dropped then it will try to start other one while reusing the socket that is still connected, but this is not actually working, the two dropped at the end.
 
-The working script is the portForward.php file, this case works when one of the socket closes, then both sockets are force to close and terminate the connection and then the application wait for a new connection. This approach is better than the other one.
+Use `portForward.php` to relay traffic. If one side stops sending, the proxy
+flushes the remaining bytes before shutting down that write side. The other
+direction can still carry a response.
+
+Each direction buffers at most 256 KiB of pending data. If the destination
+can't keep up, the proxy pauses reads in that direction until the queue drains.
 
 ## Configuration
 
@@ -36,3 +41,15 @@ To run the script, just open a commandline in the directory of the files, and ty
 ```
 C:\portFoward2Proxy>php portForward.php
 ```
+
+## Tests
+
+On Linux with PHP 8 and the sockets extension installed, run:
+
+```sh
+php tests/test_port_forward.php
+```
+
+The tests use local TCP sockets to check half-closes in both directions,
+delivery to a slow receiver while a second client transfers, and the configured
+outbound source port.
