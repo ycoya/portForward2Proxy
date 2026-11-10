@@ -47,9 +47,9 @@ function connectTo(int $port)
     return $client;
 }
 
-function acceptClient($server)
+function acceptClient($server, int $timeout = 1)
 {
-    $peer = @stream_socket_accept($server, 1);
+    $peer = @stream_socket_accept($server, $timeout);
     if ($peer === false) {
         throw new RuntimeException('Timed out accepting a connection');
     }
@@ -182,6 +182,23 @@ $tests = [
             if (portOf($peer, true) !== $source) {
                 throw new RuntimeException('The next client did not get the configured source port');
             }
+        });
+    },
+    'a pending connection starts relaying once the destination is ready' => function () use ($root) {
+        $upstream = localSocket(true);
+        $queued = fillBacklog($upstream);
+        withProxy($root, portOf($upstream), [], 5, function ($port, $log) use ($upstream) {
+            $client = connectTo($port);
+            waitForLog($log, 'Connection pending.');
+            // The backlog is still full, so this byte must wait for the connection.
+            fwrite($client, 'x');
+            fclose(acceptClient($upstream));
+            fclose(acceptClient($upstream));
+
+            $peer = acceptClient($upstream, 4);
+            expectRead($peer, 'x', 'Pending client did not start sending');
+            fwrite($peer, 'y');
+            expectRead($client, 'y', 'Pending client did not start receiving');
         });
     },
     'a refused connection releases its source port' => function () use ($root) {
