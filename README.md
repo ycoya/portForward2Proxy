@@ -44,10 +44,10 @@ C:\portFoward2Proxy>php portForward.php
 
 ## Tests
 
-With PHP 8 and the sockets extension installed, run:
+On Linux with PHP 8 and the sockets extension installed, run:
 
 ```sh
-python3 tests/test_port_forward.py
+php tests/test_port_forward.php
 ```
 
 The tests use local TCP sockets to check half-closes in both directions,
