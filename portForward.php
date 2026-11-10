@@ -3,7 +3,7 @@
  * Aquí se intenta; que si se cae la conexión de entrada(msgSock) o la de salida(sockSend), se elimina el objeto y se vuelve a establecer
  * ambas conexiones;
  */
-require('./lib/ConnectionHandler.php');
+require __DIR__ . '/lib/NonBlockingConnectionHandler.php';
 extract(require('config.php'));
 
 $connectTimeout = (float) ($connectTimeout ?? 5);
@@ -58,7 +58,8 @@ while (true) {
 
     if (!$outBoundLocalPortEnabled || ($outBoundLocalPortEnabled && !empty($_socketSendSrcPorts))) {
         $sockSendLocalPort = array_shift($_socketSendSrcPorts);
-        $con = new ConnectionHandler($sockListen, $remoteAddress, $dstPort, $localAddress, $sockSendLocalPort, $connectTimeout);
+        $con = new NonBlockingConnectionHandler($sockListen, $remoteAddress, $dstPort, $localAddress,
+            $sockSendLocalPort, $connectTimeout);
         if($con->isActive()) {
             $connections[] = $con;
             echo json_encode($_socketSendSrcPorts) . "\n";
